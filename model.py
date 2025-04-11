@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPRegressor
 
 
+
 class ModelCreator:
     """Class for Model creation and application.
 
@@ -19,12 +20,13 @@ class ModelCreator:
         self.dataframe = dataframe
 
     def create_model_data(
-        self,
-        column_to_predict: str,
-        quantitative_variables: list[str],
-        categorical_variables: list[str],
-        test_size: float = 0.1,
-    ):
+            self,
+            column_to_predict: str,
+            quantitative_variables: list[str],
+            categorical_variables: list[str],
+            test_size: float = 0.1,
+            random_state: int = 42,  # Add random_state for reproducibility
+        ):
         """Private method to transform an input with the scalers.
 
         Only to use after a first create_model_data execution.
@@ -37,15 +39,17 @@ class ModelCreator:
         Args:
             column_to_predict (str): The variable you want to predict (electricity consumption)
             quantitative_variables (list[str]): Column names of your quantitative variables (ex: temperature)
-            categorical_variable (list[str]): Column names of your categorical variables (ex: region)
-            test_size (int): value between 0 and 1 of the proportion of your dataset
-                you want to use to test your model on data he didn't train on.
-                I recommand staying around 0.1 (0.05 or 0.15 are nice values for example)
+            categorical_variables (list[str]): Column names of your categorical variables (ex: region)
+            test_size (float): value between 0 and 1 of the proportion of your dataset
+                you want to use to test your model on data it didn't train on.
+                I recommend staying around 0.1 (0.05 or 0.15 are nice values for example)
+            random_state (int): Seed for the random number generator, ensures reproducibility.
         """
         self.quantitative_variables = quantitative_variables
         self.categorical_variables = categorical_variables
         self.test_size = test_size
 
+        # Normalize quantitative data
         quantitative_df = self.dataframe[quantitative_variables]
         self.quantitative_scaler = StandardScaler()
         norm_quantitative_df = pd.DataFrame(
@@ -53,24 +57,26 @@ class ModelCreator:
             columns=quantitative_df.columns,
         )
 
+        # One-hot encode categorical data
         categorical_df = self.dataframe[categorical_variables]
         self.categorical_scaler = OneHotEncoder(sparse_output=False)
-        categorical_intermediate = self.categorical_scaler.fit_transform(
-            categorical_df
-        )
+        categorical_intermediate = self.categorical_scaler.fit_transform(categorical_df)
         norm_categorical_df = pd.DataFrame(
             categorical_intermediate,
             columns=[
-                str(x)
-                for sublist in self.categorical_scaler.categories_
-                for x in sublist
+                str(x) for sublist in self.categorical_scaler.categories_ for x in sublist
             ],
         )
-        # self.category_dict={category:list(subcategory) for category, subcategory in zip(categorical_variables, self.categorical_scaler.categories_)}
+
+        # Prepare the target variable
         self.y = self.dataframe[column_to_predict].to_numpy()
+
+        # Combine quantitative and categorical data into one dataset
         self.X = pd.concat([norm_quantitative_df, norm_categorical_df], axis=1)
+
+        # Split the data into train and test sets using the random_state for reproducibility
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            self.X, self.y, test_size=test_size
+            self.X, self.y, test_size=test_size, random_state=random_state  # Pass random_state here
         )
 
     def _transform_input(self, input: dict):
@@ -131,7 +137,7 @@ class ModelCreator:
         )
 
     def train_model(
-        self, network_layers: list[int] = [24, 12, 6], max_iterations: int = 500
+        self, network_layers: list[int] = [24, 12, 6], max_iterations: int = 500 ,random_state: int = 1,
     ):
         """Trains the model with passed training parameters.
 
@@ -158,7 +164,7 @@ class ModelCreator:
         """
         self.base_model = MLPRegressor(
             hidden_layer_sizes=network_layers,
-            random_state=1,
+            random_state=random_state,
             max_iter=max_iterations,
         )
         self.base_model.fit(self.X_train, self.y_train)
